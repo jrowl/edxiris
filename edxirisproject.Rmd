@@ -1,0 +1,168 @@
+---
+title: "Edx Data Project"
+date: "June 6, 2019"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Introduction
+
+This project explores the Iris data set from the UCI Machine Learning Repository. (https://archive.ics.uci.edu/ml/datasets/Iris) The objective is to create a model that can predict the species of iris based on physical characteristics. The key steps were performed:
+
+  Import and review the data for problems/issues/outliers
+  
+  Create train and test sets
+  
+  Train the models
+  
+  Use test set to predict model performance
+  
+# Analysis
+
+We first imported the data and assigned the proper column names.
+
+```{r}
+#import data(https://github.com/jrowl/edxiris)
+data <- read.csv("iris.data", header=FALSE)
+
+#set comlum names
+colnames(data) <- c("sepal_length", "sepal_width", "petal_length" , "petal_width" , "class")
+
+```
+
+We then reviewed the data for any problems/issues/outliers.
+
+```{r}
+summary(data)
+```
+
+The summary statistics show that there are no missing values or outliers in the data sets. The means and ranges seem reasonable and there are no negative values. The observations of each class are equally split.
+
+We then plotted the data to visually inspect for correlations or any patterns in the data.
+
+```{r}
+#visually inspect data correlations
+plot(data)
+
+```
+
+The data shows several correlations among the predictors. There also seems to be clumps of data that could represent parts that could be linearly separable. This is promising because we may be able to use a simple linear modeling technique.
+
+Next we created a train and test set using 75/25.
+
+```{r}
+#create train and test index
+set.seed(918)
+index <- sample(1:nrow(data), nrow(data)*.75, replace = F)
+```
+
+We then fit a model using Linear Discriminant Analysis(LDA) based on our earlier observation of linearly separable groups in the the data plots.
+
+```{r}
+#fit LDA model
+library(MASS)
+fit.lda <- lda(class~. , data[index,])
+
+#build a confusion matrix of lda model results on train data
+predict.lda <- predict(fit.lda, newdata = data[index,], type = "class")
+table(predict.lda$class, data$class[index])
+
+#calculate accuracy of model on train data
+error.train.lda <- 1-(sum(predict.lda$class == data$class[index])/length(data$class[index]))
+```
+
+The LDA model successfully classified all but 3 of the observations correctly. There may be non-linearities in the model. Next we will fit a Quadratic Discriminant Analysis(QDA) model to see if it performs better.
+
+```{r}
+#fit qda model
+fit.qda <- qda(class~. , data[index,])
+
+#build a confusion matrix of qda model results on trianing data
+predict.qda <- predict(fit.qda, newdata = data[index,], type = "class")
+table(predict.qda$class, data$class[index])
+
+#calculate accuracy of model on training data
+error.train.qda <- 1-(sum(predict.qda$class == data$class[index])/length(data$class[index]))
+```
+
+The QDA model did not seem to perform any better than the LDA model. There may be interactions in the model. We will use a Decision Tree and Random Forest(RF) model next.
+
+```{r}
+#fit and prune tree model
+library(rpart)
+fit.tree <- rpart(class~. , data[index,])
+fit.tree <- prune(fit.tree, cp = fit.tree$cptable[min(fit.tree$cptable[,3]) == fit.tree$cptable[,3],1])
+
+#build a confusion matrix of tree model results on trianing data
+predict.tree <- predict(fit.tree, newdata = data[index,], type = "class" , cp = fit.tree$cptable[min(fit.tree$cptable[,3]) == fit.tree$cptable[,3],1])
+table(predict.tree, data$class[index])
+
+#calculate accuracy of model on training data
+error.train.tree <- 1-(sum(predict.tree == data$class[index])/length(data$class[index]))
+
+#fit rf model
+library(randomForest)
+fit.rf <- randomForest(class~. , data[index,])
+
+#build a confusion matrix of rf model results on trianing data
+predict.rf <- predict(fit.rf, newdata = data[index,], type = "class")
+table(predict.rf, data$class[index])
+
+#calculate accuracy of model on training data
+error.train.rf <- 1-(sum(predict.rf == data$class[index])/length(data$class[index]))
+
+```
+
+The RF correctly classified all observations of the train data while the decision tree miss-classified 3. There may have been interactions between the variables that the RF model was able to find or it may have overtrained.
+
+#Results
+
+Finally we will test the models with the 25% of the data we held back from the training set to get an estimate of model performance.
+
+```{r}
+#lda test set performance
+
+predict.lda <- predict(fit.lda, newdata = data[-index,], type = "class")
+error.test.lda <- 1-(sum(predict.lda$class == data$class[-index])/length(data$class[-index]))
+
+#qda test set performance
+
+predict.qda <- predict(fit.qda, newdata = data[-index,], type = "class")
+error.test.qda <- 1-(sum(predict.qda$class == data$class[-index])/length(data$class[-index]))
+
+#tree test set petreeormance
+
+predict.tree <- predict(fit.tree, newdata = data[-index,], type = "class")
+error.test.tree <- 1-(sum(predict.tree == data$class[-index])/length(data$class[-index]))
+
+#rf test set performance
+
+predict.rf <- predict(fit.rf, newdata = data[-index,], type = "class")
+error.test.rf <- 1-(sum(predict.rf == data$class[-index])/length(data$class[-index]))
+
+#build comparison table
+comparison <- data.frame(matrix(ncol=2, nrow=4))
+colnames(comparison) <- c("train", "test")
+rownames(comparison) <- c("lda", "qda", "tree" ,"rf")
+
+comparison[1,1] <- error.train.lda
+comparison[1,2] <- error.test.lda
+comparison[2,1] <- error.train.qda
+comparison[2,2] <- error.test.qda
+comparison[3,1] <- error.train.tree
+comparison[3,2] <- error.test.tree
+comparison[4,1] <- error.train.rf
+comparison[4,2] <- error.test.rf
+
+round(comparison, 3)
+```
+
+#Conclusion 
+
+While the Random Forest model performed the best on the train set, the LDA model performed best on the left out test set. As a result the LDA model is the best overall model for classifying Iris species in this data set from this experiment.
+
+
+
